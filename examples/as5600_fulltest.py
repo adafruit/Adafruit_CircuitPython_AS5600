@@ -9,7 +9,9 @@ This example tests all functionality of the AS5600 magnetic angle sensor
 """
 
 import time
+
 import board
+
 import adafruit_as5600
 
 # Initialize I2C and AS5600
@@ -216,26 +218,26 @@ while True:
     # Get angle readings
     raw_angle = as5600.raw_angle
     angle = as5600.angle
-    
+
     # Build output string
     output = f"Raw: {raw_angle:4d} (0x{raw_angle:03X}) | Scaled: {angle:4d} (0x{angle:03X})"
-    
+
     # Check status conditions
     if as5600.magnet_detected:
         output += " | Magnet: YES"
     else:
         output += " | Magnet: NO "
-        
+
     if as5600.min_gain_overflow:
         output += " | MH: magnet too strong"
-        
+
     if as5600.max_gain_overflow:
         output += " | ML: magnet too weak"
-    
+
     # Get AGC and Magnitude values
     agc = as5600.agc
     magnitude = as5600.magnitude
     output += f" | AGC: {agc:3d} | Mag: {magnitude:4d}"
-    
+
     print(output)
     time.sleep(2)
