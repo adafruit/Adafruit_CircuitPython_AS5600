@@ -94,7 +94,18 @@ Usage Example
 
 .. code-block:: python
 
+    import time
+    import board
     import adafruit_as5600
+
+    i2c = board.I2C()
+    sensor = adafruit_as5600.AS5600(i2c)
+
+    while True:
+        print(f"Raw angle: {sensor.raw_angle}")
+        print(f"Scaled angle: {sensor.angle}")
+        print(f"Magnitude: {sensor.magnitude}")
+        time.sleep(2)
 
 Documentation
 =============
