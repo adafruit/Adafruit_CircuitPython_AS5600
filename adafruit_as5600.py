@@ -26,14 +26,15 @@ Implementation Notes
 * Adafruit's Register library: https://github.com/adafruit/Adafruit_CircuitPython_Register
 """
 
-from micropython import const
 from adafruit_bus_device.i2c_device import I2CDevice
+from adafruit_register.i2c_bit import ROBit, RWBit
+from adafruit_register.i2c_bits import RWBits
 from adafruit_register.i2c_struct import ROUnaryStruct, UnaryStruct
-from adafruit_register.i2c_bits import RWBits, ROBits
-from adafruit_register.i2c_bit import RWBit, ROBit
+from micropython import const
 
 try:
-    import typing  # pylint: disable=unused-import
+    from typing import Optional
+
     from busio import I2C
 except ImportError:
     pass
@@ -42,21 +43,21 @@ __version__ = "0.0.0+auto.0"
 __repo__ = "https://github.com/adafruit/Adafruit_CircuitPython_AS5600.git"
 
 # I2C Address
-AS5600_DEFAULT_ADDRESS = const(0x36)
+_ADDR = const(0x36)
 
 # Register addresses
-_AS5600_REG_ZMCO = const(0x00)  # ZMCO register (burn count)
-_AS5600_REG_ZPOS_H = const(0x01)  # Zero position high byte
-_AS5600_REG_MPOS_H = const(0x03)  # Maximum position high byte
-_AS5600_REG_MANG_H = const(0x05)  # Maximum angle high byte
-_AS5600_REG_CONF_L = const(0x08)  # Configuration register low byte
-_AS5600_REG_CONF_H = const(0x07)  # Configuration register high byte
-_AS5600_REG_STATUS = const(0x0B)  # Status register
-_AS5600_REG_RAWANGLE_H = const(0x0C)  # Raw angle high byte
-_AS5600_REG_ANGLE_H = const(0x0E)  # Scaled angle high byte
-_AS5600_REG_AGC = const(0x1A)  # Automatic Gain Control register
-_AS5600_REG_MAGNITUDE_H = const(0x1B)  # Magnitude high byte
-_AS5600_REG_BURN = const(0xFF)  # Burn command register
+_ZMCO = const(0x00)  # ZMCO register (burn count)
+_ZPOS_H = const(0x01)  # Zero position high byte
+_MPOS_H = const(0x03)  # Maximum position high byte
+_MANG_H = const(0x05)  # Maximum angle high byte
+_CONF_L = const(0x08)  # Configuration register low byte
+_CONF_H = const(0x07)  # Configuration register high byte
+_STATUS = const(0x0B)  # Status register
+_RAWANGLE_H = const(0x0C)  # Raw angle high byte
+_ANGLE_H = const(0x0E)  # Scaled angle high byte
+_AGC = const(0x1A)  # Automatic Gain Control register
+_MAGNITUDE_H = const(0x1B)  # Magnitude high byte
+_BURN = const(0xFF)  # Burn command register
 
 # Power mode constants
 POWER_MODE_NOM = const(0x00)  # Normal mode (default)
@@ -89,56 +90,70 @@ SLOW_FILTER_4X = const(0x02)  # 4x
 SLOW_FILTER_2X = const(0x03)  # 2x
 
 # Fast filter threshold constants
-FAST_FILTER_THRESH_SLOW_ONLY = const(0x00)  # Slow filter only (default)
-FAST_FILTER_THRESH_6LSB = const(0x01)  # 6 LSB
-FAST_FILTER_THRESH_7LSB = const(0x02)  # 7 LSB
-FAST_FILTER_THRESH_9LSB = const(0x03)  # 9 LSB
-FAST_FILTER_THRESH_18LSB = const(0x04)  # 18 LSB
-FAST_FILTER_THRESH_21LSB = const(0x05)  # 21 LSB
-FAST_FILTER_THRESH_24LSB = const(0x06)  # 24 LSB
-FAST_FILTER_THRESH_10LSB = const(0x07)  # 10 LSB
+FAST_FILTER_SLOW_ONLY = const(0x00)  # Slow filter only (default)
+FAST_FILTER_6LSB = const(0x01)  # 6 LSB
+FAST_FILTER_7LSB = const(0x02)  # 7 LSB
+FAST_FILTER_9LSB = const(0x03)  # 9 LSB
+FAST_FILTER_18LSB = const(0x04)  # 18 LSB
+FAST_FILTER_21LSB = const(0x05)  # 21 LSB
+FAST_FILTER_24LSB = const(0x06)  # 24 LSB
+FAST_FILTER_10LSB = const(0x07)  # 10 LSB
 
 
 class AS5600:
     """Driver for the AS5600 12-bit contactless position sensor.
 
     :param ~busio.I2C i2c_bus: The I2C bus the AS5600 is connected to.
-    :param int address: The I2C device address. Defaults to :const:`AS5600_DEFAULT_ADDRESS`
+    :param int address: The I2C device address. Defaults to :const:`_ADDR`
     """
 
-    # Register definitions using adafruit_register
-    _zmco = ROUnaryStruct(_AS5600_REG_ZMCO, "B")  # Read-only burn count
+    _zmco = ROUnaryStruct(_ZMCO, "B")  # Read-only burn count
 
     # 12-bit position registers (stored as 16-bit big-endian)
-    _zpos = UnaryStruct(_AS5600_REG_ZPOS_H, ">H")
-    _mpos = UnaryStruct(_AS5600_REG_MPOS_H, ">H")
-    _mang = UnaryStruct(_AS5600_REG_MANG_H, ">H")
-    _rawangle = ROUnaryStruct(_AS5600_REG_RAWANGLE_H, ">H")
-    _angle = ROUnaryStruct(_AS5600_REG_ANGLE_H, ">H")
+    _zpos = UnaryStruct(_ZPOS_H, ">H")
+    _mpos = UnaryStruct(_MPOS_H, ">H")
+    _mang = UnaryStruct(_MANG_H, ">H")
+    _rawangle = ROUnaryStruct(_RAWANGLE_H, ">H")
+    _angle = ROUnaryStruct(_ANGLE_H, ">H")
 
     # 8-bit registers
-    _agc = ROUnaryStruct(_AS5600_REG_AGC, "B")
-    _magnitude = ROUnaryStruct(_AS5600_REG_MAGNITUDE_H, ">H")
+    agc: int = ROUnaryStruct(_AGC, "B")
+    """The current AGC (Automatic Gain Control) value.
+        Range is 0-255 in 5V mode, 0-128 in 3.3V mode."""
+    _magnitude = ROUnaryStruct(_MAGNITUDE_H, ">H")
 
     # Status register bits
-    _mh = ROBit(_AS5600_REG_STATUS, 3)  # MH (magnet too strong)
-    _ml = ROBit(_AS5600_REG_STATUS, 4)  # ML (magnet too weak)
-    _md = ROBit(_AS5600_REG_STATUS, 5)  # MD (magnet detected)
+    min_gain_overflow: bool = ROBit(_STATUS, 3)  # MH (magnet too strong)
+    """True if AGC minimum gain overflow occurred (magnet too strong)."""
+    max_gain_overflow: bool = ROBit(_STATUS, 4)  # ML (magnet too weak)
+    """True if AGC maximum gain overflow occurred (magnet too weak)."""
+    magnet_detected: bool = ROBit(_STATUS, 5)  # MD (magnet detected)
+    """True if a magnet is detected, otherwise False"""
 
     # Configuration bits
-    _power_mode = RWBits(2, _AS5600_REG_CONF_L, 0)
-    _hysteresis = RWBits(2, _AS5600_REG_CONF_L, 2)
-    _output_stage = RWBits(2, _AS5600_REG_CONF_L, 4)
-    _pwm_freq = RWBits(2, _AS5600_REG_CONF_L, 6)
-    _slow_filter = RWBits(2, _AS5600_REG_CONF_H, 0)
-    _fast_filter_thresh = RWBits(3, _AS5600_REG_CONF_H, 2)
-    _watchdog = RWBit(_AS5600_REG_CONF_H, 5)  # Bit 13 of the 16-bit config register
+    _power_mode = RWBits(2, _CONF_L, 0)
+    _hysteresis = RWBits(2, _CONF_L, 2)
+    _output_stage = RWBits(2, _CONF_L, 4)
+    _pwm_freq = RWBits(2, _CONF_L, 6)
+    _slow_filter = RWBits(2, _CONF_H, 0)
+    _fast_filter = RWBits(3, _CONF_H, 2)
+    watchdog: bool = RWBit(_CONF_H, 5)  # Bit 13 of the 16-bit config register
+    """Enable or disable the watchdog timer."""
 
-    def __init__(self, i2c: I2C, address: int = AS5600_DEFAULT_ADDRESS) -> None:
-        self.i2c_device = I2CDevice(i2c, address)
-        # Check if we can communicate with the device
-        # The AS5600 doesn't have a WHO_AM_I register, so we'll just try reading status
-        _ = self.magnet_detected
+    def __init__(self, i2c: I2C, address: int = _ADDR) -> None:
+        try:
+            self.i2c_device = I2CDevice(i2c, address)
+            # Check if we can communicate with the device
+            self.watchdog = False
+            self.power_mode = POWER_MODE_NOM
+            self.hysteresis = HYSTERESIS_OFF
+            self.slow_filter = SLOW_FILTER_16X
+            self.fast_filter_threshold = FAST_FILTER_SLOW_ONLY
+            self.z_position = 0
+            self.m_position = 4095
+            self.max_angle = 4095
+        except ValueError:
+            raise ValueError(f"No I2C device found at address 0x{address:02X}")
 
     @property
     def zm_count(self) -> int:
@@ -197,40 +212,9 @@ class AS5600:
         return self._angle & 0x0FFF
 
     @property
-    def agc_min_gain_overflow(self) -> bool:
-        """True if AGC minimum gain overflow occurred (magnet too strong)."""
-        return self._mh
-
-    @property
-    def agc_max_gain_overflow(self) -> bool:
-        """True if AGC maximum gain overflow occurred (magnet too weak)."""
-        return self._ml
-
-    @property
-    def magnet_detected(self) -> bool:
-        """True if a magnet is detected."""
-        return self._md
-
-    @property
-    def agc(self) -> int:
-        """The current AGC (Automatic Gain Control) value.
-        Range is 0-255 in 5V mode, 0-128 in 3.3V mode."""
-        return self._agc
-
-    @property
     def magnitude(self) -> int:
         """The magnitude value from the CORDIC processor (0-4095)."""
         return self._magnitude & 0x0FFF
-
-    @property
-    def watchdog(self) -> bool:
-        """Enable or disable the watchdog timer."""
-        return self._watchdog
-
-    @watchdog.setter
-    def watchdog(self, value: bool) -> None:
-        """Enable or disable the watchdog timer."""
-        self._watchdog = value
 
     @property
     def power_mode(self) -> int:
@@ -294,12 +278,12 @@ class AS5600:
 
     @property
     def fast_filter_threshold(self) -> int:
-        """The fast filter threshold setting. Use FAST_FILTER_THRESH_* constants."""
-        return self._fast_filter_thresh
+        """The fast filter threshold setting. Use FAST_FILTER_* constants."""
+        return self._fast_filter
 
     @fast_filter_threshold.setter
     def fast_filter_threshold(self, value: int) -> None:
-        """Set the fast filter threshold. Use FAST_FILTER_THRESH_* constants."""
+        """Set the fast filter threshold. Use FAST_FILTER_* constants."""
         if not 0 <= value <= 7:
             raise ValueError("Invalid fast filter threshold setting")
-        self._fast_filter_thresh = value
+        self._fast_filter = value
